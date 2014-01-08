@@ -13,6 +13,8 @@ func main() {
 
 	btceInstance := btcego.New(auth)
 
+	testPair := btcego.Pair("btc_usd")
+
 	info, err := btceInstance.GetInfo()
 	if err != nil {
 		log.Println(err)
@@ -33,11 +35,34 @@ func main() {
 	}
 	log.Printf("%#v\n", tradeHistory)
 
-	optionActiveOrders := &btcego.ActiveOrdersRequest{Pair: "btc_usd"}
+	optionActiveOrders := &btcego.ActiveOrdersRequest{Pair: testPair}
 	activeOrders, err := btceInstance.ActiveOrders(optionActiveOrders)
 	if err != nil {
 		log.Println(err)
 	}
 	log.Printf("%#v\n", activeOrders)
 
+	fee, err := btceInstance.GetFee(testPair)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Printf("%#v\n", fee)
+
+	ticker, err := btceInstance.GetTicker(testPair)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Printf("%#v\n", ticker)
+
+	trade, err := btceInstance.GetTrades(testPair)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Printf("%#v\n", trade)
+
+	depth, err := btceInstance.GetDepth(testPair)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Printf("%#v\n", depth)
 }

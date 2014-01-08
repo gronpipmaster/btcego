@@ -9,9 +9,12 @@ import (
 	"time"
 )
 
-const debug = true
+const debug = false
 
-const endpointUrl = "https://btc-e.com/tapi"
+const (
+	endpointUrl       = "https://btc-e.com/tapi"
+	endpointPublicUrl = "https://btc-e.com/api/2/%s/%s"
+)
 
 const (
 	OrderAsc  = "ASC"
@@ -96,6 +99,20 @@ func (self *Btce) query(params map[string]string, resp interface{}, usingWrapp b
 		err = json.NewDecoder(r.Body).Decode(resp)
 	}
 
+	return err
+}
+
+func (self *Btce) queryWoAuth(pair Pair, action string, resp interface{}) error {
+	endpoint, err := url.Parse(fmt.Sprintf(endpointPublicUrl, fmt.Sprint(pair), action))
+	if err != nil {
+		return err
+	}
+	r, err := http.Get(endpoint.String())
+	if err != nil {
+		return err
+	}
+	defer r.Body.Close()
+	err = json.NewDecoder(r.Body).Decode(resp)
 	return err
 }
 
@@ -211,8 +228,7 @@ func (self *Btce) TransHistory(option *TransHistoryRequest) (*TransHistoryRespon
 	resp := TransHistoryResponse{}
 	for _, rawResp := range respWrapp {
 		order := TransOrder{}
-		err := json.Unmarshal(rawResp, &order)
-		if err != nil {
+		if err := json.Unmarshal(rawResp, &order); err != nil {
 			return nil, err
 		}
 		resp = append(resp, order)
@@ -264,8 +280,7 @@ func (self *Btce) TradeHistory(option *TradeHistoryRequest) (*TradeHistoryRespon
 	resp := TradeHistoryResponse{}
 	for _, rawResp := range respWrapp {
 		order := TradeOrder{}
-		err := json.Unmarshal(rawResp, &order)
-		if err != nil {
+		if err := json.Unmarshal(rawResp, &order); err != nil {
 			return nil, err
 		}
 		resp = append(resp, order)
@@ -302,8 +317,7 @@ func (self *Btce) ActiveOrders(option *ActiveOrdersRequest) (*ActiveOrdersRespon
 	resp := ActiveOrdersResponse{}
 	for _, rawResp := range respWrapp {
 		order := ActiveOrder{}
-		err := json.Unmarshal(rawResp, &order)
-		if err != nil {
+		if err := json.Unmarshal(rawResp, &order); err != nil {
 			return nil, err
 		}
 		resp = append(resp, order)
@@ -360,10 +374,98 @@ func (self *Btce) CancelOrder(orderId OrderId) (*CancelOrderResponse, error) {
 	return resp, nil
 }
 
-/*
-TODO:
-https://btc-e.com/api/2/%pair%/fee
-https://btc-e.com/api/2/%pair%/ticker
-https://btc-e.com/api/2/%pair%/trades
-https://btc-e.com/api/2/%pair%/depth
-*/
+type FeeResponse struct {
+	Trade float64 `json:"trade"`
+}
+
+//Get service fee, see example https://btc-e.com/api/2/btc_usd/fee
+func (self *Btce) GetFee(pair Pair) (*FeeResponse, error) {
+	resp := &FeeResponse{}
+	if err := self.queryWoAuth(pair, "fee", resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+type TickerResponse struct {
+	High       float64 `json:"high"`
+	Low        float64 `json:"low"`
+	Avg        float64 `json:"avg"`
+	Vol        float64 `json:"vol"`
+	VolCur     float64 `json:"vol_cur"`
+	Last       float64 `json:"last"`
+	Buy        float64 `json:"buy"`
+	Sell       float64 `json:"sell"`
+	Updated    int64   `json:"updated"`
+	ServerTime int64   `json:"server_time"`
+}
+
+//Get service fee, see example https://btc-e.com/api/2/btc_usd/ticker
+func (self *Btce) GetTicker(pair Pair) (*TickerResponse, error) {
+	respWrapp := make(map[string]json.RawMessage)
+	if err := self.queryWoAuth(pair, "ticker", &respWrapp); err != nil {
+		return nil, err
+	}
+	resp := &TickerResponse{}
+	if err := json.Unmarshal(respWrapp["ticker"], &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+type TradesResponse []Trade
+
+type Trade struct {
+	Created       int64   `json:"date"`
+	Price         float64 `json:"price"`
+	Amount        float64 `json:"amount"`
+	Tid           int64   `json:"tid"`
+	PriceCurrency string  `json:"price_currency"`
+	Item          string  `json:"item"`
+	TradeType     string  `json:"trade_type"`
+}
+
+//Get trades, see example https://btc-e.com/api/2/btc_usd/trades
+func (self *Btce) GetTrades(pair Pair) (*TradesResponse, error) {
+	resp := &TradesResponse{}
+	if err := self.queryWoAuth(pair, "trades", resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+type DepthResponse struct {
+	Asks []Depth `json:"asks"`
+	Bids []Depth `json:"bids"`
+}
+
+type Depth struct {
+	Price  float64
+	Amount float64
+}
+
+//Get depth, see example https://btc-e.com/api/2/btc_usd/depth
+func (self *Btce) GetDepth(pair Pair) (*DepthResponse, error) {
+	respWrapp := make(map[string]interface{})
+	if err := self.queryWoAuth(pair, "depth", &respWrapp); err != nil {
+		return nil, err
+	}
+	resp := &DepthResponse{}
+	for key, items := range respWrapp {
+		if key == "asks" {
+			for _, values := range items.([]interface{}) {
+				value := values.([]interface{})
+				depth := Depth{value[0].(float64), value[1].(float64)}
+				resp.Asks = append(resp.Asks, depth)
+			}
+		} else {
+			for _, values := range items.([]interface{}) {
+				value := values.([]interface{})
+				depth := Depth{value[0].(float64), value[1].(float64)}
+				resp.Bids = append(resp.Bids, depth)
+			}
+		}
+	}
+
+	return resp, nil
+}
