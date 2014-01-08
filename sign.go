@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha512"
 	"encoding/hex"
+	"sort"
 	"strings"
 )
 
@@ -59,6 +60,7 @@ func NewSign(auth Auth, params map[string]string) *sign {
 	for k, v := range params {
 		sarray = append(sarray, Encode(k)+"="+Encode(v))
 	}
+	sort.StringSlice(sarray).Sort()
 	payload := strings.Join(sarray, "&")
 	hash := hmac.New(sha512.New, []byte(auth.SecretKey))
 	hash.Write([]byte(payload))
