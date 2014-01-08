@@ -160,7 +160,7 @@ type GetInfoResponse struct {
 	ServerTime       int64  `json:"server_time"`
 }
 
-//See https://btc-e.com/api/documentation section "getInfo"
+//It returns the information about the user's current balance, API key privileges,the number of transactions, the number of open orders and the server time. See https://btc-e.com/api/documentation section "getInfo"
 func (self *Btce) GetInfo() (*GetInfoResponse, error) {
 	params := makeParams("getInfo")
 	resp := &GetInfoResponse{}
@@ -229,7 +229,7 @@ type TradeHistoryRequest struct {
 	FromId OrderId `json:"from_id,omitempty"`
 	//The ID of the transaction to finish displaying with, default: infinity
 	EndId OrderId `json:"end_id,omitempty"`
-	//Sorting, default btcego.orderDesc
+	//Sorting, default: btcego.OrderDesc
 	Order string `json:"order,omitempty"`
 	//When to start displaying?, default: 0
 	Since int64 `json:"since,omitempty"`
@@ -272,3 +272,98 @@ func (self *Btce) TradeHistory(option *TradeHistoryRequest) (*TradeHistoryRespon
 	}
 	return &resp, nil
 }
+
+type ActiveOrdersRequest struct {
+	//The pair to show the transactions, default: all pairs
+	Pair Pair `json:"pair,omitempty"`
+}
+
+type ActiveOrdersResponse []ActiveOrder
+
+type ActiveOrder struct {
+	Pair    Pair    `json:"pair"`
+	Type    string  `json:"type"`
+	Amount  float64 `json:"amount"`
+	Rate    float64 `json:"rate"`
+	Status  int64   `json:"status"`
+	Created int64   `json:"timestamp_created"`
+}
+
+//Returns your open orders. See https://btc-e.com/api/documentation section "ActiveOrders"
+func (self *Btce) ActiveOrders(option *ActiveOrdersRequest) (*ActiveOrdersResponse, error) {
+	params := makeParams("ActiveOrders")
+	if option != nil {
+		addOptions(params, option)
+	}
+	respWrapp := make(map[string]json.RawMessage)
+	if err := self.query(params, &respWrapp, true); err != nil {
+		return nil, err
+	}
+	resp := ActiveOrdersResponse{}
+	for _, rawResp := range respWrapp {
+		order := ActiveOrder{}
+		err := json.Unmarshal(rawResp, &order)
+		if err != nil {
+			return nil, err
+		}
+		resp = append(resp, order)
+	}
+	return &resp, nil
+}
+
+type TradeRequest struct {
+	//The pair to show the transactions, required
+	Pair Pair `json:"pair"`
+	//The transaction type (btcego.OperationTypeBuy or btcego.OperationTypeSell), required
+	Type string `json:"type"`
+	//The rate to buy/sell, required
+	Rate float64 `json:"rate"`
+	//The amount which is necessary to buy/sell, required
+	Amount float64 `json:"amount"`
+}
+
+type TradeResponse struct {
+	Received float64 `json:"received"`
+	Remains  float64 `json:"remains"`
+	OrderId  OrderId `json:"order_id"`
+	Funds    Funds   `json:"funds"`
+}
+
+//Trading is done according to this method. See https://btc-e.com/api/documentation section Trade
+func (self *Btce) Trade(option *TradeRequest) (*TradeResponse, error) {
+	params := makeParams("Trade")
+	if option != nil {
+		addOptions(params, option)
+	} else {
+		return nil, &Error{"TradeRequest is nil."}
+	}
+	resp := &TradeResponse{}
+	if err := self.query(params, resp, true); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+type CancelOrderResponse struct {
+	OrderId OrderId `json:"order_id"`
+	Funds   Funds   `json:"funds"`
+}
+
+//Cancellation of the order. See https://btc-e.com/api/documentation section CancelOrder
+func (self *Btce) CancelOrder(orderId OrderId) (*CancelOrderResponse, error) {
+	params := makeParams("CancelOrder")
+	params["order_id"] = fmt.Sprint(orderId)
+	resp := &CancelOrderResponse{}
+	if err := self.query(params, resp, true); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+/*
+TODO:
+https://btc-e.com/api/2/%pair%/fee
+https://btc-e.com/api/2/%pair%/ticker
+https://btc-e.com/api/2/%pair%/trades
+https://btc-e.com/api/2/%pair%/depth
+*/
