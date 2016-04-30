@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const debug = true
+const debug = false
 
 var endpointBaseUrl = "https://btc-e.com/"
 
