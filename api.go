@@ -3,6 +3,7 @@ package btcego
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,9 +12,11 @@ import (
 
 const debug = false
 
+var endpointBaseUrl = "https://btc-e.com/"
+
 const (
-	endpointUrl       = "https://btc-e.com/tapi"
-	endpointPublicUrl = "https://btc-e.com/api/2/%s/%s"
+	endpointUrl       = "tapi"
+	endpointPublicUrl = "api/2/%s/%s"
 )
 
 const (
@@ -25,6 +28,37 @@ const (
 	OperationTypeBuy  = "buy"
 	OperationTypeSell = "sell"
 )
+
+func init() {
+	baseUrl, err := getValidBaseUrl()
+	if err != nil {
+		fmt.Println("Cannot connect to btc-e")
+	} else {
+		endpointBaseUrl = baseUrl
+	}
+}
+
+func getValidBaseUrl() (string, error) {
+	baseUrls := []string{
+		"https://btc-e.com/",
+		"https://btc-e.nz/",
+	}
+
+	for _, url := range baseUrls {
+		_, err := http.Get(url)
+		if err != nil {
+			if debug {
+				fmt.Println(err)
+			}
+
+			continue
+		}
+
+		return url, nil
+	}
+
+	return "", errors.New("Can't connect to btc-e")
+}
 
 type Auth struct {
 	AccessKey, SecretKey string
@@ -66,7 +100,7 @@ func (self *Btce) query(params map[string]string, resp interface{}, usingWrapp b
 		fmt.Println("[--Signature--]")
 		fmt.Println(sign.signature)
 	}
-	req, err := http.NewRequest("POST", endpointUrl, bytes.NewBufferString(multimap(params).Encode()))
+	req, err := http.NewRequest("POST", endpointBaseUrl+endpointUrl, bytes.NewBufferString(multimap(params).Encode()))
 	if err != nil {
 		return err
 	}
